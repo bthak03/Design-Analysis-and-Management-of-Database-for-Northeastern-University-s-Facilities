@@ -1,0 +1,312 @@
+/*DESIGN, ANALYSIS AND MANAGEMENT OF DATABASE FOR NORTHEASTERN UNIVERISTY'S FACILITIES
+
+-Bhavesh Thakkar, Divya Subbaian, Karan Parikh,  Varun Raj Vavilala */
+
+
+--CREATING THE DATABASE 
+CREATE DATABASE Team15StudentFacilities;
+
+--CREATING ENTITIES
+
+
+CREATE TABLE STUDENTORGANIZATIONS
+(
+OrganizationID  INT IDENTITY NOT NULL PRIMARY KEY,
+OrganizationParticipation VARCHAR (50) NOT NULL
+);
+
+
+CREATE TABLE UHCS
+(
+UHCSID  INT IDENTITY NOT NULL PRIMARY KEY,
+Visits VARCHAR (50) NOT NULL
+);
+
+
+CREATE TABLE FOODCOURT
+(
+FoodID  INT IDENTITY NOT NULL PRIMARY KEY,
+FoodJoints VARCHAR (250) NOT NULL,
+Expenditure VARCHAR (250) NOT NULL
+);
+
+
+
+CREATE TABLE CAMPUSRECREATION
+(
+CampusrecID INT IDENTITY NOT NULL PRIMARY KEY,
+RecreationalFacilities VARCHAR (250) NOT NULL,
+VisitationHours VARCHAR (250) NOT NULL
+);
+
+
+
+CREATE TABLE INDIVIDUALRATING
+(
+IndividualID INT IDENTITY NOT NULL PRIMARY KEY,
+Studyspacerating INT NOT NULL,
+Libraryrating INT NOT NULL,
+Campusrecrating INT NOT NULL, 
+Foodcourtrating INT NOT NULL,
+UHCSrating INT NOT NULL,
+Educationrating INT NOT NULL,
+CDCrating INT NOT NULL,
+redeyerating INT NOT NULL,
+Organizationrating INT NOT NULL 
+);
+
+
+CREATE TABLE STUDENTDETAILS
+(
+StudentID  INT IDENTITY NOT NULL PRIMARY KEY,
+StudyLevel VARCHAR (250) NOT NULL,
+SurveyResponseID VARCHAR (250) NOT NULL,
+IPaddress VARCHAR (250) NOT NULL
+);
+
+
+
+CREATE TABLE CAREERDESIGNCENTER
+(
+cdcID INT IDENTITY NOT NULL PRIMARY KEY,
+StudentID INT NOT NULL REFERENCES STUDENTDETAILS(StudentID),
+ResourceUtilization VARCHAR(250) NOT NULL
+);
+
+
+CREATE TABLE SOFTWARESERVICES
+(
+SoftwareID INT IDENTITY NOT NULL PRIMARY KEY,
+Software VARCHAR (250) NOT NULL
+);
+
+
+CREATE TABLE EDUCATIONALSERVICES
+(
+EducationID  INT IDENTITY NOT NULL PRIMARY KEY,
+EducationalPlatforms VARCHAR (250) NOT NULL,
+SeminarsandConferences VARCHAR (250) NOT NULL,
+cdcID INT NOT NULL REFERENCES CAREERDESIGNCENTER(cdcID),
+SoftwareID INT NOT NULL REFERENCES SOFTWARESERVICES(SoftwareID)
+);
+
+
+CREATE TABLE TRANSPORTATION
+(
+TransportationID  INT IDENTITY NOT NULL PRIMARY KEY,
+StudentID INT NOT NULL REFERENCES STUDENTDETAILS(StudentID),
+Modes VARCHAR (250) NOT NULL,
+CommutingTime VARCHAR (250) NOT NULL,
+DistanceTravelled VARCHAR (250) NOT NULL
+);
+
+
+CREATE TABLE HOUSING
+(
+HousingID  INT IDENTITY NOT NULL PRIMARY KEY,
+ResidentialStatus VARCHAR (250) NOT NULL,
+);
+
+CREATE TABLE HOUSINGANDTRANSPORTATION
+(
+HousingID INT NOT NULL REFERENCES HOUSING(HousingID),
+TransportationID INT NOT NULL REFERENCES TRANSPORTATION(TransportationID)
+CONSTRAINT PKhousingtransportation PRIMARY KEY CLUSTERED (HousingID, TransportationID)
+);
+
+CREATE TABLE LIBRARY
+(
+LibraryID  INT IDENTITY NOT NULL PRIMARY KEY,
+StudentID INT NOT NULL REFERENCES STUDENTDETAILS(StudentID),
+Levels VARCHAR (250) NOT NULL,
+Resources VARCHAR (250) NOT NULL
+);
+
+
+
+CREATE TABLE STUDYSPACE
+(
+StudyID INT IDENTITY NOT NULL PRIMARY KEY,
+Location VARCHAR (250) NOT NULL,
+Utilization VARCHAR (250) NOT NULL,
+LibraryID INT NOT NULL REFERENCES LIBRARY(LibraryID)
+);
+
+
+CREATE TABLE STUDENTFACILITIES
+(
+FacilitiesID  INT IDENTITY NOT NULL PRIMARY KEY,
+StudyID INT NOT NULL REFERENCES STUDYSPACE(StudyID),
+CampusrecID INT NOT NULL REFERENCES  CAMPUSRECREATION(CampusrecID),
+FoodID INT NOT NULL REFERENCES FOODCOURT(FoodID),
+UHCSID INT NOT NULL REFERENCES UHCS(UHCSID),
+EducationID INT NOT NULL REFERENCES EDUCATIONALSERVICES(EducationID),
+HousingID INT NOT NULL REFERENCES HOUSING(HousingID),
+OrganizationID INT NOT NULL REFERENCES STUDENTORGANIZATIONS(OrganizationID)
+);
+
+
+CREATE TABLE STUDENTASSESMENT
+(
+FacilitiesID  INT NOT NULL REFERENCES STUDENTFACILITIES(FacilitiesID),
+IndividualID INT NOT NULL REFERENCES INDIVIDUALRATING(IndividualID),
+OverallRating INT NOT NULL
+CONSTRAINT rating PRIMARY KEY CLUSTERED (FacilitiesID, IndividualID)
+);
+
+CREATE TABLE STUDENT
+(
+StudentID INT NOT NULL REFERENCES STUDENTDETAILS(StudentID),
+FacilitiesID INT NOT NULL REFERENCES STUDENTFACILITIES(FacilitiesID),
+CONSTRAINT PKStudent PRIMARY KEY CLUSTERED (StudentID, FacilitiesID)
+);
+
+-- DATA IS INSERTED INTO TABLES THROUGH THE DATA IMPORT/EXPORT WIZARD
+
+-- FUNCTIONS
+
+/* 1) CREATING A COMPUTED COLUMN IN TRANSPORTATION 
+TABLE TO DETERMINE IF RED EYE CAN BE ACCESSED*/
+
+CREATE FUNCTION ShuttleServices
+(@distancetravelled VARCHAR(250))
+Returns varchar(250)
+AS
+
+BEGIN
+DECLARE @access VARCHAR(250)
+SELECT @access = @DistanceTravelled
+
+
+RETURN  
+(CASE 
+ WHEN @access = 'greater than 2 miles'
+ THEN 'Red Eye/Shuttle Services cannot be accessed'
+ WHEN  @access = 'less than 2 miles'
+ THEN'Red Eye/Shuttle Services can be accessed'
+ END);
+
+END;
+
+
+ALTER TABLE TRANSPORTATION
+ADD ShuttleServicesAccess AS (dbo.ShuttleServices(DistanceTravelled));
+
+
+SELECT * FROM TRANSPORTATION
+
+
+/* 2) CREATING COMPUTED COLUMNS IN INDIVIDUAL RATING 
+TO DETERMINE SCOPE OF IMPROVEMENT - Shuttle Services */
+
+Create function RedeyeServices
+(@redeyerating INT)
+RETURNS varchar(250)
+AS
+
+BEGIN
+DECLARE @improvement INT
+SELECT @Improvement = @redeyerating
+FROM INDIVIDUALRATING 
+
+RETURN
+(CASE
+ WHEN @redeyerating < 7 
+ THEN 'Red Eye/Shuttle services needs improvement'
+ ELSE 'Red Eye/Shuttle service does not need improvement'
+
+ END);
+
+END;
+
+Alter Table INDIVIDUALRATING
+Add ShuttleServiceImprovement as (dbo.RedeyeServices(redeyerating));
+
+
+SELECT * FROM INDIVIDUALRATING
+
+
+
+--3) CREATING COMPUTED COLUMNS IN INDIVIDUAL RATING TO DETERMINE SCOPE OF IMPROVEMENT - Study Space and Library
+
+CREATE FUNCTION StudySpaceImprovement
+(@studyspace INT, @Library INT)
+RETURNS varchar(250)
+AS
+
+BEGIN
+DECLARE @totalrating INT
+SELECT @totalrating = AVG(studyspacerating + Libraryrating)
+FROM INDIVIDUALRATING 
+
+RETURN
+(CASE
+ WHEN @totalrating < 7
+ THEN 'Study Space Facilities needs improvement'
+ ELSE 'Study Space Facilities does not need improvement'
+ END);
+
+END;
+
+Alter Table INDIVIDUALRATING
+Add StudySpaceLibraryImprovement as (dbo.StudySpaceImprovement(studyspacerating, Libraryrating));
+
+
+--4) CREATING COMPUTED COLUMNS IN INDIVIDUAL RATING TO DETERMINE SCOPE OF IMPROVEMENT - Education and CDC
+
+CREATE FUNCTION EducationCDC
+(@education INT, @CDC INT)
+RETURNS varchar(250)
+AS
+
+BEGIN
+DECLARE @totalrating INT
+SELECT @totalrating = AVG(Educationrating + CDCrating)
+FROM INDIVIDUALRATING 
+
+RETURN
+(CASE
+ WHEN @totalrating < 7
+ THEN 'Education/CDC Facilities needs improvement'
+ ELSE 'Education/CDC Facilities does not need improvement'
+ END);
+
+END;
+
+Alter Table INDIVIDUALRATING
+Add EducationCDCImprovement as (dbo.EducationCDC(Educationrating, CDCrating));
+
+
+	  	   
+
+--COLUMN DATA ENCRYPTION FOR IP ADDRESS COLUMN IN STUDENT DETAILS ENTITY TO MAINTAIN CONFIDENTIALITY
+
+USE Team15StudentFacilities;
+GO 
+-- CREATE DB master key 
+CREATE MASTER KEY 
+ENCRYPTION BY PASSWORD = 'Teamhusky_15' ;
+
+-- certificate to protect symmetry key
+CREATE CERTIFICATE team15_certificate
+WITH SUBJECT = 'DMDD TEAM 15' ,
+EXPIRY_DATE = '2026-01-01' ;
+-- symmetry key
+CREATE SYMMETRIC KEY team15_sykey
+WITH ALGORITHM = AES_128
+ENCRYPTION BY CERTIFICATE team15_certificate ;
+
+-- Open symmetry key
+OPEN SYMMETRIC KEY team15_sykey
+DECRYPTION BY CERTIFICATE team15_certificate ;
+
+-- Encrypting the IPADDRESS 
+update STUDENTDETAILS
+SET IPaddress = ENCRYPTBYKEY(KEY_GUID(N'team15_sykey'),IPaddress);
+
+-- Decryption 
+SELECT convert(varchar,DECRYPTBYKEY(IPaddress))
+FROM STUDENTDETAILS;
+-- DECRYPTION CODE 
+SELECT convert(varchar, DECRYPTBYKEY(IPaddress)) FROM STUDENTDETAILS;
+
